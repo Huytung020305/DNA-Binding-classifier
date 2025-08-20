@@ -4,13 +4,12 @@ Production-ready Streamlit web application for DNA binding protein classificatio
 """
 
 import streamlit as st
-import sys
-import os
 import warnings
 import joblib
 import pandas as pd
 import numpy as np
 import re
+import os
 from io import StringIO
 
 # Suppress warnings for production
@@ -120,7 +119,10 @@ def sequence_to_cnn_input(sequence, max_length=1000):
     return np.array([sequence_nums])
 
 def safe_load_model(model_path):
-    """Safely load model with error handling"""
+    """Safely load model with error handling and fallback for missing models"""
+    if not os.path.exists(model_path):
+        return None, f"Model file not found: {model_path}"
+    
     try:
         if model_path.endswith('.h5'):
             import tensorflow as tf
@@ -150,18 +152,13 @@ def make_prediction(model, sequence, model_type):
         else:
             if 'PseAAC' in model_type or 'pseAAC' in model_type:
                 features = calculate_pseaac_features(sequence)
-            elif 'Physicochemical' in model_type:
-                features = extract_physicochemical_properties(sequence)
-            else:
-                features = calculate_amino_acid_composition(sequence)
-            
-            # Create feature names
-            if 'PseAAC' in model_type or 'pseAAC' in model_type:
                 amino_acids = ['A', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'K', 'L', 'M', 'N', 'P', 'Q', 'R', 'S', 'T', 'V', 'W', 'Y']
                 feature_names = [f'AA_{aa}' for aa in amino_acids] + [f'Lambda_{i+1}' for i in range(10)]
             elif 'Physicochemical' in model_type:
+                features = extract_physicochemical_properties(sequence)
                 feature_names = ['Hydrophobic', 'Hydrophilic', 'Aromatic', 'Aliphatic', 'Charged', 'Polar']
             else:
+                features = calculate_amino_acid_composition(sequence)
                 amino_acids = ['A', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'K', 'L', 'M', 'N', 'P', 'Q', 'R', 'S', 'T', 'V', 'W', 'Y']
                 feature_names = [f'AA_{aa}' for aa in amino_acids]
             
@@ -228,8 +225,23 @@ model_categories = {
 
 selected_category = st.sidebar.selectbox("Select Model Category", list(model_categories.keys()))
 available_models = model_categories[selected_category]
-selected_model_name = st.sidebar.selectbox("Select Model", list(available_models.keys()))
-selected_model_path = available_models[selected_model_name]
+
+# Filter available models based on what actually exists
+existing_models = {}
+for name, path in available_models.items():
+    if os.path.exists(path):
+        existing_models[name] = path
+    else:
+        existing_models[f"{name} (Not Available)"] = path
+
+selected_model_name = st.sidebar.selectbox("Select Model", list(existing_models.keys()))
+selected_model_path = existing_models[selected_model_name]
+
+# Show availability status
+if "Not Available" in selected_model_name:
+    st.sidebar.warning("⚠️ Selected model not available in deployment")
+else:
+    st.sidebar.success("✅ Model available")
 
 # Main interface
 col1, col2 = st.columns([2, 1])
@@ -355,6 +367,7 @@ with col3:
         st.success("✅ Model available")
     else:
         st.error("❌ Model file not found")
+        st.info("💡 This model is not included in the cloud deployment to reduce size. Available models: Random Forest (PseAAC), Random Forest (Physicochemical), CNN1")
 
 with col4:
     st.subheader("Usage Instructions")
