@@ -125,12 +125,17 @@ def safe_load_model(model_path):
     
     try:
         if model_path.endswith('.h5'):
-            import tensorflow as tf
-            with warnings.catch_warnings():
-                warnings.simplefilter("ignore")
-                model = tf.keras.models.load_model(model_path, compile=False)
-                model.compile(optimizer='adam', loss='binary_crossentropy', metrics=['accuracy'])
-            return model, None
+            try:
+                import tensorflow as tf
+                with warnings.catch_warnings():
+                    warnings.simplefilter("ignore")
+                    model = tf.keras.models.load_model(model_path, compile=False)
+                    model.compile(optimizer='adam', loss='binary_crossentropy', metrics=['accuracy'])
+                return model, None
+            except ImportError:
+                return None, "TensorFlow not available in this deployment. CNN models are not supported."
+            except Exception as e:
+                return None, f"Error loading TensorFlow model: {str(e)}"
         else:
             model = joblib.load(model_path)
             return model, None
@@ -143,12 +148,15 @@ def make_prediction(model, sequence, model_type):
         sequence = re.sub(r'[^ACDEFGHIKLMNPQRSTVWY]', '', sequence.upper())
         
         if 'CNN' in model_type:
-            features = sequence_to_cnn_input(sequence)
-            with warnings.catch_warnings():
-                warnings.simplefilter("ignore")
-                prediction_proba = model.predict(features, verbose=0)[0][0]
-                prediction = 1 if prediction_proba > 0.5 else 0
-                confidence = prediction_proba if prediction == 1 else (1 - prediction_proba)
+            try:
+                features = sequence_to_cnn_input(sequence)
+                with warnings.catch_warnings():
+                    warnings.simplefilter("ignore")
+                    prediction_proba = model.predict(features, verbose=0)[0][0]
+                    prediction = 1 if prediction_proba > 0.5 else 0
+                    confidence = prediction_proba if prediction == 1 else (1 - prediction_proba)
+            except Exception as e:
+                return None, f"CNN prediction error: {str(e)}"
         else:
             if 'PseAAC' in model_type or 'pseAAC' in model_type:
                 features = calculate_pseaac_features(sequence)
@@ -181,6 +189,14 @@ def make_prediction(model, sequence, model_type):
     except Exception as e:
         return None, f"Prediction error: {str(e)}"
 
+# Check TensorFlow availability
+TENSORFLOW_AVAILABLE = False
+try:
+    import tensorflow as tf
+    TENSORFLOW_AVAILABLE = True
+except ImportError:
+    pass
+
 # Main Application
 st.title("🧬 DNA Binding Protein Classifier")
 
@@ -192,6 +208,12 @@ st.info("""
 
 ✅ **All models are production-ready with proper warning suppression!**
 """)
+
+if not TENSORFLOW_AVAILABLE:
+    st.warning("""
+    ⚠️ **TensorFlow not available in this deployment**
+    CNN models are not supported. Traditional ML models (PseAAC and Physicochemical) are fully functional.
+    """)
 
 st.markdown("---")
 
@@ -214,14 +236,17 @@ model_categories = {
         "Decision Tree": "models/Traditional ML - Physicochemical Properties/DT_Physicochemical_Properties.joblib",
         "Naive Bayes": "models/Traditional ML - Physicochemical Properties/NB_Physicochemical_Properties.joblib",
         "KNN": "models/Traditional ML - Physicochemical Properties/KNN_Physicochemical_Properties.joblib"
-    },
-    "🤖 CNN Models (Deep Learning)": {
+    }
+}
+
+# Add CNN models only if TensorFlow is available
+if TENSORFLOW_AVAILABLE:
+    model_categories["🤖 CNN Models (Deep Learning)"] = {
         "CNN1": "models/CNN/CNN1.h5",
         "CNN2": "models/CNN/CNN2.h5",
         "ProtCNN1": "models/CNN/ProtCNN1.h5",
         "ProtCNN2": "models/CNN/ProtCNN2.h5"
     }
-}
 
 selected_category = st.sidebar.selectbox("Select Model Category", list(model_categories.keys()))
 available_models = model_categories[selected_category]
