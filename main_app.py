@@ -272,48 +272,39 @@ st.title("🧬 DNA Binding Protein Classifier")
 st.subheader("Minimal Cloud Version")
 
 # Show dependency status
-st.sidebar.header("System Status")
-st.sidebar.write("**Dependencies:**")
-st.sidebar.write(f"- Pandas: {'✅' if PANDAS_AVAILABLE else '❌'}")
-st.sidebar.write(f"- NumPy: {'✅' if NUMPY_AVAILABLE else '❌'}")
-st.sidebar.write(f"- Scikit-learn: {'✅' if SKLEARN_AVAILABLE else '❌'}")
-st.sidebar.write(f"- Joblib: {'✅' if JOBLIB_AVAILABLE else '❌'}")
-st.sidebar.write(f"- TensorFlow: {'✅' if TENSORFLOW_AVAILABLE else '❌'}")
-st.sidebar.write(f"- BioPython: {'✅' if BIOPYTHON_AVAILABLE else '❌'}")
-
 # Model selection
 st.sidebar.header("Model Selection")
 
 model_categories = {
     "CNN Models": {
-        "CNN1": "Saved Model/CNN/CNN1.h5",
-        "CNN2": "Saved Model/CNN/CNN2.h5",
-        "ProtCNN1": "Saved Model/CNN/ProtCNN1.h5",
-        "ProtCNN2": "Saved Model/CNN/ProtCNN2.h5"
+        "CNN1": "models/CNN/CNN1.h5",
+        "CNN2": "models/CNN/CNN2.h5",
+        "ProtCNN1": "models/CNN/ProtCNN1.h5",
+        "ProtCNN2": "models/CNN/ProtCNN2.h5"
     },
     "Traditional ML - TF-IDF": {
-        "Logistic Regression": "Saved Model/Traditional ML - TF-IDF/Logistic Regression_TF-IDF.joblib",
-        "SVM": "Saved Model/Traditional ML - TF-IDF/SVM_TF-IDF.joblib",
-        "Random Forest": "Saved Model/Traditional ML - TF-IDF/Random Forest_TF-IDF.joblib",
-        "Naive Bayes": "Saved Model/Traditional ML - TF-IDF/Naive Bayes_TF-IDF.joblib",
-        "Decision Tree": "Saved Model/Traditional ML - TF-IDF/Decision Tree_TF-IDF.joblib",
-        "KNN": "Saved Model/Traditional ML - TF-IDF/KNN_TF-IDF.joblib"
+        "Logistic Regression": "models/Traditional ML - TF-IDF/Logistic Regression_TF-IDF.joblib",
+        "SVM": "models/Traditional ML - TF-IDF/SVM_TF-IDF.joblib",
+        "Random Forest": "models/Traditional ML - TF-IDF/Random Forest_TF-IDF.joblib",
+        "Naive Bayes": "models/Traditional ML - TF-IDF/Naive Bayes_TF-IDF.joblib",
+        "Decision Tree": "models/Traditional ML - TF-IDF/Decision Tree_TF-IDF.joblib",
+        "KNN": "models/Traditional ML - TF-IDF/KNN_TF-IDF.joblib"
     },
     "Traditional ML - PseAAC": {
-        "Logistic Regression": "Saved Model/Traditional ML - PseAAC/LR_pseAAC.joblib",
-        "SVM": "Saved Model/Traditional ML - PseAAC/SVM_pseAAC.joblib",
-        "Random Forest": "Saved Model/Traditional ML - PseAAC/RF_pseAAC.joblib",
-        "Naive Bayes": "Saved Model/Traditional ML - PseAAC/NB_pseAAC.joblib",
-        "Decision Tree": "Saved Model/Traditional ML - PseAAC/DT_pseAAC.joblib",
-        "KNN": "Saved Model/Traditional ML - PseAAC/KNN_pseAAC.joblib"
+        "Logistic Regression": "models/Traditional ML - PseAAC/LR_pseAAC.joblib",
+        "SVM": "models/Traditional ML - PseAAC/SVM_pseAAC.joblib",
+        "Random Forest": "models/Traditional ML - PseAAC/RF_pseAAC.joblib",
+        "Naive Bayes": "models/Traditional ML - PseAAC/NB_pseAAC.joblib",
+        "Decision Tree": "models/Traditional ML - PseAAC/DT_pseAAC.joblib",
+        "KNN": "models/Traditional ML - PseAAC/KNN_pseAAC.joblib"
     },
     "Traditional ML - Physicochemical": {
-        "Logistic Regression": "Saved Model/Traditional ML - Physicochemical Properties/LR_Physicochemical_Properties.joblib",
-        "SVM": "Saved Model/Traditional ML - Physicochemical Properties/SVM_Physicochemical_Properties.joblib",
-        "Random Forest": "Saved Model/Traditional ML - Physicochemical Properties/RF_Physicochemical_Properties.joblib",
-        "Naive Bayes": "Saved Model/Traditional ML - Physicochemical Properties/NB_Physicochemical_Properties.joblib",
-        "Decision Tree": "Saved Model/Traditional ML - Physicochemical Properties/DT_Physicochemical_Properties.joblib",
-        "KNN": "Saved Model/Traditional ML - Physicochemical Properties/KNN_Physicochemical_Properties.joblib"
+        "Logistic Regression": "models/Traditional ML - Physicochemical Properties/LR_Physicochemical_Properties.joblib",
+        "SVM": "models/Traditional ML - Physicochemical Properties/SVM_Physicochemical_Properties.joblib",
+        "Random Forest": "models/Traditional ML - Physicochemical Properties/RF_Physicochemical_Properties.joblib",
+        "Naive Bayes": "models/Traditional ML - Physicochemical Properties/NB_Physicochemical_Properties.joblib",
+        "Decision Tree": "models/Traditional ML - Physicochemical Properties/DT_Physicochemical_Properties.joblib",
+        "KNN": "models/Traditional ML - Physicochemical Properties/KNN_Physicochemical_Properties.joblib"
     }
 }
 
