@@ -100,11 +100,18 @@ dmypy.json
 *.pickle
 *.model
 *.weights
-models/
 checkpoints/
 tensorboard_logs/
 wandb/
 mlruns/
+
+# Exclude large model files but keep essential ones for deployment
+models/Traditional ML - TF-IDF/
+models/CNN/
+models/Traditional ML - PseAAC/*
+models/Traditional ML - Physicochemical Properties/*
+!models/Traditional ML - PseAAC/RF_pseAAC.joblib
+!models/Traditional ML - Physicochemical Properties/RF_Physicochemical_Properties.joblib
 
 # Data files (uncomment if you don't want to track data)
 # *.csv
