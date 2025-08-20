@@ -10,6 +10,16 @@ from Bio import SeqIO
 from io import StringIO
 import re
 
+# Import deployment utilities for production fixes
+try:
+    from deployment_utils import setup_production_environment, load_keras_model_safely
+    # Set up production environment (must be called early)
+    setup_production_environment()
+    deployment_utils_available = True
+except ImportError:
+    deployment_utils_available = False
+    print("Warning: deployment_utils not found, using standard configuration")
+
 # Try to import TensorFlow for CNN models
 try:
     import tensorflow as tf
@@ -17,6 +27,24 @@ try:
     tf_available = True
 except ImportError:
     tf_available = False
+
+# Import our prediction utilities to handle sklearn warnings
+try:
+    from prediction_utils import predict_with_traditional_ml, safe_model_predict, convert_prediction_to_label
+    prediction_utils_available = True
+except ImportError:
+    prediction_utils_available = False
+    print("Warning: prediction_utils module not found, using fallback methods")
+
+# Function to suppress sklearn warnings and handle feature names properly
+import warnings
+from sklearn.exceptions import DataConversionWarning, InconsistentVersionWarning
+
+# Suppress the specific sklearn warnings
+warnings.filterwarnings("ignore", message="X does not have valid feature names")
+warnings.filterwarnings("ignore", category=DataConversionWarning)
+warnings.filterwarnings("ignore", category=InconsistentVersionWarning)
+warnings.filterwarnings("ignore", message="Trying to unpickle estimator")
 
 # Page configuration
 st.set_page_config(
@@ -107,18 +135,70 @@ else:
     selected_model_name = None
     selected_model_path = None
 
+# Function to create proper feature DataFrame with names
+def create_feature_dataframe(features, model_path):
+    """Create a pandas DataFrame with proper feature names to avoid sklearn warnings"""
+    
+    # Ensure features is a 2D array
+    if isinstance(features, list) and len(features) > 0:
+        if isinstance(features[0], list):
+            feature_array = np.array(features)
+        else:
+            feature_array = np.array([features])
+    else:
+        feature_array = np.array(features).reshape(1, -1) if np.array(features).ndim == 1 else np.array(features)
+    
+    # Create appropriate feature names based on model type
+    if "TF-IDF" in model_path:
+        feature_names = [f'AA_{aa}' for aa in 'ACDEFGHIKLMNPQRSTVWY']
+    elif "PseAAC" in model_path:
+        feature_names = ([f'AA_{aa}' for aa in 'ACDEFGHIKLMNPQRSTVWY'] + 
+                        ['hydro_mean', 'hydro_std', 'hydro_min', 'hydro_max'] +
+                        ['mw_mean', 'mw_std', 'mw_min', 'mw_max'] +
+                        ['vol_mean', 'vol_std', 'vol_min', 'vol_max'] +
+                        ['helix_mean', 'helix_std', 'helix_min', 'helix_max'])
+    elif "Physicochemical" in model_path:
+        feature_names = ['gravy', 'net_charge', 'mol_weight', 'instability', 
+                        'aromaticity', 'flexibility', 'isoelectric_point', 
+                        'helix_fraction', 'length']
+    else:
+        # Default feature names
+        feature_names = [f'feature_{i}' for i in range(feature_array.shape[1])]
+    
+    # Ensure feature names match feature count
+    n_features = feature_array.shape[1]
+    if len(feature_names) != n_features:
+        if len(feature_names) > n_features:
+            feature_names = feature_names[:n_features]
+        else:
+            feature_names.extend([f'feature_{i}' for i in range(len(feature_names), n_features)])
+    
+    # Create DataFrame with proper feature names
+    return pd.DataFrame(feature_array, columns=feature_names)
+
 # Function to load model
 @st.cache_resource
 def load_model(model_path):
     try:
         if os.path.exists(model_path):
             if model_path.endswith('.h5'):
-                # Load Keras/TensorFlow model
+                # Load Keras/TensorFlow model with safe loading
                 if not tf_available:
                     st.error("TensorFlow is required to load CNN models. Please install tensorflow.")
                     return None
                 try:
-                    return keras.models.load_model(model_path)
+                    if deployment_utils_available:
+                        # Use safe loading function that handles warnings
+                        return load_keras_model_safely(model_path)
+                    else:
+                        # Fallback to standard loading with warning suppression
+                        import warnings
+                        with warnings.catch_warnings():
+                            warnings.simplefilter("ignore")
+                            model = keras.models.load_model(model_path, compile=False)
+                            # Recompile to avoid warnings
+                            model.compile(optimizer='adam', loss='binary_crossentropy', metrics=['accuracy'])
+                            return model
                 except Exception as e:
                     st.error(f"Error loading CNN model: {str(e)}")
                     return None
@@ -542,14 +622,27 @@ with col2:
                                         confidence = "N/A"
                                         st.error(f"CNN model failed: {str(cnn_error)}")
                             elif hasattr(model, 'predict'):
-                                # Handle traditional ML models
-                                raw_prediction = model.predict(features)[0]
-                                prediction = convert_prediction_to_label(raw_prediction)
-                                if hasattr(model, 'predict_proba'):
-                                    probabilities = model.predict_proba(features)[0]
-                                    confidence = f"{max(probabilities):.4f}"
+                                # Handle traditional ML models with proper feature names
+                                if prediction_utils_available:
+                                    # Use the robust prediction utility
+                                    result = safe_model_predict(model, features, selected_model_path)
+                                    if result['success']:
+                                        raw_prediction = result['prediction']
+                                        prediction = convert_prediction_to_label(raw_prediction)
+                                        confidence = f"{result['confidence']:.4f}" if result['confidence'] is not None else "N/A"
+                                    else:
+                                        prediction = f"Error: {result['error']}"
+                                        confidence = "N/A"
                                 else:
-                                    confidence = "N/A"
+                                    # Fallback to original method with DataFrame
+                                    features_df = create_feature_dataframe(features, selected_model_path)
+                                    raw_prediction = model.predict(features_df)[0]
+                                    prediction = convert_prediction_to_label(raw_prediction)
+                                    if hasattr(model, 'predict_proba'):
+                                        probabilities = model.predict_proba(features_df)[0]
+                                        confidence = f"{max(probabilities):.4f}"
+                                    else:
+                                        confidence = "N/A"
                             else:
                                 prediction = "Unable to predict"
                                 confidence = "N/A"
