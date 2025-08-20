@@ -24,6 +24,7 @@ PANDAS_AVAILABLE = False
 NUMPY_AVAILABLE = False
 SKLEARN_AVAILABLE = False
 JOBLIB_AVAILABLE = False
+TENSORFLOW_AVAILABLE = False
 BIOPYTHON_AVAILABLE = False
 
 try:
@@ -41,6 +42,12 @@ except ImportError:
 try:
     import joblib
     JOBLIB_AVAILABLE = True
+except ImportError:
+    pass
+
+try:
+    import tensorflow as tf
+    TENSORFLOW_AVAILABLE = True
 except ImportError:
     pass
 
@@ -100,6 +107,142 @@ def extract_physicochemical_properties(sequence):
     
     return properties
 
+def safe_load_model(model_path):
+    """Safely load model with error handling"""
+    if not os.path.exists(model_path):
+        return None, f"Model file not found: {model_path}"
+    
+    try:
+        if model_path.endswith('.h5'):
+            try:
+                import tensorflow as tf
+                with warnings.catch_warnings():
+                    warnings.simplefilter("ignore")
+                    model = tf.keras.models.load_model(model_path, compile=False)
+                    model.compile(optimizer='adam', loss='binary_crossentropy', metrics=['accuracy'])
+                return model, None
+            except ImportError:
+                return None, "TensorFlow not available - CNN models not supported"
+        else:
+            if JOBLIB_AVAILABLE:
+                import joblib
+                model = joblib.load(model_path)
+                return model, None
+            else:
+                return None, "Joblib not available - Traditional ML models not supported"
+    except Exception as e:
+        return None, f"Error loading model: {str(e)}"
+
+def make_prediction_with_model(model, sequence, model_type):
+    """Make prediction using loaded ML model"""
+    try:
+        sequence = re.sub(r'[^ACDEFGHIKLMNPQRSTVWY]', '', sequence.upper())
+        
+        if 'CNN' in model_type:
+            # CNN prediction logic
+            features = sequence_to_cnn_input(sequence)
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore")
+                prediction_proba = model.predict(features, verbose=0)[0][0]
+                prediction = 1 if prediction_proba > 0.5 else 0
+                confidence = prediction_proba if prediction == 1 else (1 - prediction_proba)
+        else:
+            # Traditional ML prediction
+            if 'PseAAC' in model_type or 'pseAAC' in model_type:
+                features = calculate_pseaac_features(sequence)
+                amino_acids = ['A', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'K', 'L', 'M', 'N', 'P', 'Q', 'R', 'S', 'T', 'V', 'W', 'Y']
+                feature_names = [f'AA_{aa}' for aa in amino_acids] + [f'Lambda_{i+1}' for i in range(10)]
+            elif 'Physicochemical' in model_type:
+                features = extract_physicochemical_properties(sequence)
+                feature_names = ['Hydrophobic', 'Hydrophilic', 'Aromatic', 'Aliphatic', 'Charged', 'Polar']
+            else:
+                features = calculate_amino_acid_composition(sequence)
+                amino_acids = ['A', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'K', 'L', 'M', 'N', 'P', 'Q', 'R', 'S', 'T', 'V', 'W', 'Y']
+                feature_names = [f'AA_{aa}' for aa in amino_acids]
+            
+            if PANDAS_AVAILABLE:
+                import pandas as pd
+                feature_df = pd.DataFrame([features], columns=feature_names)
+                prediction = model.predict(feature_df)[0]
+                
+                confidence = None
+                if hasattr(model, 'predict_proba'):
+                    try:
+                        proba = model.predict_proba(feature_df)[0]
+                        confidence = max(proba)
+                    except:
+                        pass
+            else:
+                # Fallback without pandas
+                prediction = model.predict([features])[0]
+                confidence = None
+        
+        return prediction, confidence
+    except Exception as e:
+        return None, f"Model prediction error: {str(e)}"
+
+def calculate_pseaac_features(sequence, lambda_val=10):
+    """Calculate simplified PseAAC features"""
+    aa_composition = calculate_amino_acid_composition(sequence)
+    
+    sequence = re.sub(r'[^ACDEFGHIKLMNPQRSTVWY]', '', sequence.upper())
+    
+    if not NUMPY_AVAILABLE:
+        # Simple fallback without numpy
+        correlation_factors = [0.0] * lambda_val
+        return aa_composition + correlation_factors
+    
+    import numpy as np
+    
+    hydrophobicity = {'A': 1.8, 'C': 2.5, 'D': -3.5, 'E': -3.5, 'F': 2.8,
+                     'G': -0.4, 'H': -3.2, 'I': 4.5, 'K': -3.9, 'L': 3.8,
+                     'M': 1.9, 'N': -3.5, 'P': -1.6, 'Q': -3.5, 'R': -4.5,
+                     'S': -0.8, 'T': -0.7, 'V': 4.2, 'W': -0.9, 'Y': -1.3}
+    
+    correlation_factors = []
+    for lag in range(1, min(lambda_val + 1, len(sequence))):
+        if len(sequence) > lag:
+            correlations = []
+            for i in range(len(sequence) - lag):
+                aa1, aa2 = sequence[i], sequence[i + lag]
+                if aa1 in hydrophobicity and aa2 in hydrophobicity:
+                    correlations.append((hydrophobicity[aa1] - hydrophobicity[aa2]) ** 2)
+            
+            if correlations:
+                correlation_factors.append(np.mean(correlations))
+            else:
+                correlation_factors.append(0.0)
+        else:
+            correlation_factors.append(0.0)
+    
+    while len(correlation_factors) < lambda_val:
+        correlation_factors.append(0.0)
+    
+    return aa_composition + correlation_factors[:lambda_val]
+
+def sequence_to_cnn_input(sequence, max_length=1000):
+    """Convert protein sequence to CNN input format"""
+    if not NUMPY_AVAILABLE:
+        return None
+    
+    import numpy as np
+    
+    aa_to_num = {
+        'A': 1, 'C': 2, 'D': 3, 'E': 4, 'F': 5, 'G': 6, 'H': 7, 'I': 8,
+        'K': 9, 'L': 10, 'M': 11, 'N': 12, 'P': 13, 'Q': 14, 'R': 15,
+        'S': 16, 'T': 17, 'V': 18, 'W': 19, 'Y': 20
+    }
+    
+    sequence = sequence.upper()
+    sequence_nums = [aa_to_num.get(aa, 0) for aa in sequence]
+    
+    if len(sequence_nums) > max_length:
+        sequence_nums = sequence_nums[:max_length]
+    else:
+        sequence_nums.extend([0] * (max_length - len(sequence_nums)))
+    
+    return np.array([sequence_nums])
+
 def simple_prediction(sequence):
     """Simple rule-based prediction when ML models aren't available"""
     properties = extract_physicochemical_properties(sequence)
@@ -135,7 +278,60 @@ st.sidebar.write(f"- Pandas: {'✅' if PANDAS_AVAILABLE else '❌'}")
 st.sidebar.write(f"- NumPy: {'✅' if NUMPY_AVAILABLE else '❌'}")
 st.sidebar.write(f"- Scikit-learn: {'✅' if SKLEARN_AVAILABLE else '❌'}")
 st.sidebar.write(f"- Joblib: {'✅' if JOBLIB_AVAILABLE else '❌'}")
+st.sidebar.write(f"- TensorFlow: {'✅' if TENSORFLOW_AVAILABLE else '❌'}")
 st.sidebar.write(f"- BioPython: {'✅' if BIOPYTHON_AVAILABLE else '❌'}")
+
+# Model selection
+st.sidebar.header("Model Selection")
+
+model_categories = {
+    "CNN Models": {
+        "CNN1": "Saved Model/CNN/CNN1.h5",
+        "CNN2": "Saved Model/CNN/CNN2.h5",
+        "ProtCNN1": "Saved Model/CNN/ProtCNN1.h5",
+        "ProtCNN2": "Saved Model/CNN/ProtCNN2.h5"
+    },
+    "Traditional ML - TF-IDF": {
+        "Logistic Regression": "Saved Model/Traditional ML - TF-IDF/Logistic Regression_TF-IDF.joblib",
+        "SVM": "Saved Model/Traditional ML - TF-IDF/SVM_TF-IDF.joblib",
+        "Random Forest": "Saved Model/Traditional ML - TF-IDF/Random Forest_TF-IDF.joblib",
+        "Naive Bayes": "Saved Model/Traditional ML - TF-IDF/Naive Bayes_TF-IDF.joblib",
+        "Decision Tree": "Saved Model/Traditional ML - TF-IDF/Decision Tree_TF-IDF.joblib",
+        "KNN": "Saved Model/Traditional ML - TF-IDF/KNN_TF-IDF.joblib"
+    },
+    "Traditional ML - PseAAC": {
+        "Logistic Regression": "Saved Model/Traditional ML - PseAAC/LR_pseAAC.joblib",
+        "SVM": "Saved Model/Traditional ML - PseAAC/SVM_pseAAC.joblib",
+        "Random Forest": "Saved Model/Traditional ML - PseAAC/RF_pseAAC.joblib",
+        "Naive Bayes": "Saved Model/Traditional ML - PseAAC/NB_pseAAC.joblib",
+        "Decision Tree": "Saved Model/Traditional ML - PseAAC/DT_pseAAC.joblib",
+        "KNN": "Saved Model/Traditional ML - PseAAC/KNN_pseAAC.joblib"
+    },
+    "Traditional ML - Physicochemical": {
+        "Logistic Regression": "Saved Model/Traditional ML - Physicochemical Properties/LR_Physicochemical_Properties.joblib",
+        "SVM": "Saved Model/Traditional ML - Physicochemical Properties/SVM_Physicochemical_Properties.joblib",
+        "Random Forest": "Saved Model/Traditional ML - Physicochemical Properties/RF_Physicochemical_Properties.joblib",
+        "Naive Bayes": "Saved Model/Traditional ML - Physicochemical Properties/NB_Physicochemical_Properties.joblib",
+        "Decision Tree": "Saved Model/Traditional ML - Physicochemical Properties/DT_Physicochemical_Properties.joblib",
+        "KNN": "Saved Model/Traditional ML - Physicochemical Properties/KNN_Physicochemical_Properties.joblib"
+    }
+}
+
+# Use fallback mode if no ML dependencies
+use_fallback = not (TENSORFLOW_AVAILABLE or JOBLIB_AVAILABLE)
+
+if use_fallback:
+    st.sidebar.warning("⚠️ ML libraries not available. Using rule-based prediction.")
+    selected_model_type = "Rule-based"
+    selected_model_path = None
+else:
+    selected_category = st.sidebar.selectbox("Select Model Category", list(model_categories.keys()))
+    selected_model_name = st.sidebar.selectbox("Select Model", list(model_categories[selected_category].keys()))
+    selected_model_path = model_categories[selected_category][selected_model_name]
+    selected_model_type = f"{selected_model_name} ({selected_category})"
+    
+    # Display selected model info
+    st.sidebar.info(f"**Selected Model:**\n{selected_model_type}")
 
 if not (PANDAS_AVAILABLE and SKLEARN_AVAILABLE and JOBLIB_AVAILABLE):
     st.warning("""
@@ -211,7 +407,21 @@ with col2:
         if st.button("🔬 Classify Sequences", type="primary"):
             results = []
             
-            with st.progress(0) as progress_bar:
+            # Load model if not using fallback
+            model = None
+            model_error = None
+            
+            if not use_fallback:
+                with st.spinner("Loading model..."):
+                    model, model_error = safe_load_model(selected_model_path)
+                    
+                if model_error:
+                    st.error(f"Model loading failed: {model_error}")
+                    st.info("Switching to rule-based prediction...")
+                    use_fallback = True
+            
+            with st.spinner("Classifying sequences..."):
+                progress_bar = st.progress(0)
                 for i, (header, sequence) in enumerate(sequences_to_classify):
                     progress_bar.progress((i + 1) / len(sequences_to_classify))
                     
@@ -221,16 +431,28 @@ with col2:
                     if len(cleaned_seq) == 0:
                         pred_text = "❌ Invalid sequence"
                         conf_text = "N/A"
+                        method = "N/A"
                     else:
-                        prediction, confidence = simple_prediction(cleaned_seq)
+                        if use_fallback:
+                            prediction, confidence = simple_prediction(cleaned_seq)
+                            method = "Rule-based"
+                        else:
+                            prediction, confidence = make_prediction_with_model(model, cleaned_seq, selected_model_type)
+                            method = selected_model_type
+                            
+                            if prediction is None:
+                                prediction, confidence = simple_prediction(cleaned_seq)
+                                method = "Rule-based (fallback)"
+                        
                         pred_text = "🧬 DNA Binding" if prediction == 1 else "🚫 Non-DNA Binding"
-                        conf_text = f"{confidence:.3f}"
+                        conf_text = f"{confidence:.3f}" if confidence is not None else "N/A"
                     
                     results.append({
                         'Sequence ID': header,
                         'Length': len(cleaned_seq),
                         'Prediction': pred_text,
                         'Confidence': conf_text,
+                        'Method': method,
                         'Sequence Preview': cleaned_seq[:50] + "..." if len(cleaned_seq) > 50 else cleaned_seq
                     })
             
