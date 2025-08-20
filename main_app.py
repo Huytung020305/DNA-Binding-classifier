@@ -277,13 +277,34 @@ st.sidebar.header("Model Selection")
 
 model_categories = {
     "CNN Models": {
-        "CNN1": "models/CNN/CNN1.h5"
+        "CNN1": "models/CNN/CNN1.h5",
+        "CNN2": "models/CNN/CNN2.h5",
+        "ProtCNN1": "models/CNN/ProtCNN1.h5",
+        "ProtCNN2": "models/CNN/ProtCNN2.h5"
+    },
+    "Traditional ML - TF-IDF": {
+        "Logistic Regression": "models/Traditional ML - TF-IDF/Logistic Regression_TF-IDF.joblib",
+        "SVM": "models/Traditional ML - TF-IDF/SVM_TF-IDF.joblib",
+        "Random Forest": "models/Traditional ML - TF-IDF/Random Forest_TF-IDF.joblib",
+        "Naive Bayes": "models/Traditional ML - TF-IDF/Naive Bayes_TF-IDF.joblib",
+        "Decision Tree": "models/Traditional ML - TF-IDF/Decision Tree_TF-IDF.joblib",
+        "KNN": "models/Traditional ML - TF-IDF/KNN_TF-IDF.joblib"
     },
     "Traditional ML - PseAAC": {
-        "Random Forest": "models/Traditional ML - PseAAC/RF_pseAAC.joblib"
+        "Logistic Regression": "models/Traditional ML - PseAAC/LR_pseAAC.joblib",
+        "SVM": "models/Traditional ML - PseAAC/SVM_pseAAC.joblib",
+        "Random Forest": "models/Traditional ML - PseAAC/RF_pseAAC.joblib",
+        "Naive Bayes": "models/Traditional ML - PseAAC/NB_pseAAC.joblib",
+        "Decision Tree": "models/Traditional ML - PseAAC/DT_pseAAC.joblib",
+        "KNN": "models/Traditional ML - PseAAC/KNN_pseAAC.joblib"
     },
     "Traditional ML - Physicochemical": {
-        "Random Forest": "models/Traditional ML - Physicochemical Properties/RF_Physicochemical_Properties.joblib"
+        "Logistic Regression": "models/Traditional ML - Physicochemical Properties/LR_Physicochemical_Properties.joblib",
+        "SVM": "models/Traditional ML - Physicochemical Properties/SVM_Physicochemical_Properties.joblib",
+        "Random Forest": "models/Traditional ML - Physicochemical Properties/RF_Physicochemical_Properties.joblib",
+        "Naive Bayes": "models/Traditional ML - Physicochemical Properties/NB_Physicochemical_Properties.joblib",
+        "Decision Tree": "models/Traditional ML - Physicochemical Properties/DT_Physicochemical_Properties.joblib",
+        "KNN": "models/Traditional ML - Physicochemical Properties/KNN_Physicochemical_Properties.joblib"
     }
 }
 
