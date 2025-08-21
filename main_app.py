@@ -141,6 +141,9 @@ def make_prediction_with_model(model, sequence, model_type):
         if 'CNN' in model_type:
             # CNN prediction logic
             features = sequence_to_cnn_input(sequence)
+            if features is None:
+                return None, "NumPy not available for CNN prediction"
+            
             with warnings.catch_warnings():
                 warnings.simplefilter("ignore")
                 prediction_proba = model.predict(features, verbose=0)[0][0]
@@ -408,7 +411,7 @@ with col2:
                         method = selected_model_type
                         
                         if prediction is None:
-                            pred_text = "❌ Prediction failed"
+                            pred_text = f"❌ Prediction failed: {confidence}"
                             conf_text = "N/A"
                         else:
                             pred_text = "🧬 DNA Binding" if prediction == 1 else "🚫 Non-DNA Binding"
