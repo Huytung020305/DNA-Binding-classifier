@@ -223,7 +223,7 @@ def calculate_pseaac_features(sequence, lambda_val=10):
     
     return aa_composition + correlation_factors[:lambda_val]
 
-def sequence_to_cnn_input(sequence, max_length=1000):
+def sequence_to_cnn_input(sequence, max_length=1200):
     """Convert protein sequence to CNN input format"""
     if not NUMPY_AVAILABLE:
         return None
@@ -239,12 +239,14 @@ def sequence_to_cnn_input(sequence, max_length=1000):
     sequence = sequence.upper()
     sequence_nums = [aa_to_num.get(aa, 0) for aa in sequence]
     
+    # Pad or truncate to max_length (1200)
     if len(sequence_nums) > max_length:
         sequence_nums = sequence_nums[:max_length]
     else:
         sequence_nums.extend([0] * (max_length - len(sequence_nums)))
     
-    return np.array([sequence_nums])
+    # Reshape to (1, 1200, 1) for CNN input
+    return np.array(sequence_nums).reshape(1, max_length, 1)
 
 
 
