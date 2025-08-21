@@ -1,6 +1,6 @@
 """
-DNA Binding Protein Classifier - Minimal Cloud Version
-Streamlit-only version that handles missing dependencies gracefully.
+DNA Binding Protein Classifier
+Full-featured machine learning version with trained models.
 """
 
 import streamlit as st
@@ -243,33 +243,11 @@ def sequence_to_cnn_input(sequence, max_length=1000):
     
     return np.array([sequence_nums])
 
-def simple_prediction(sequence):
-    """Simple rule-based prediction when ML models aren't available"""
-    properties = extract_physicochemical_properties(sequence)
-    aa_comp = calculate_amino_acid_composition(sequence)
-    
-    # Simple heuristic based on DNA-binding protein characteristics
-    # Higher aromatic and charged amino acid content often indicates DNA binding
-    aromatic_content = properties[2]
-    charged_content = properties[4]
-    
-    # Specific amino acids more common in DNA-binding proteins
-    r_content = aa_comp[14]  # Arginine
-    k_content = aa_comp[8]   # Lysine
-    h_content = aa_comp[6]   # Histidine
-    
-    # Simple scoring
-    score = (aromatic_content * 2 + charged_content * 3 + 
-             r_content * 4 + k_content * 3 + h_content * 2)
-    
-    prediction = 1 if score > 0.15 else 0
-    confidence = min(0.95, max(0.55, score * 5))
-    
-    return prediction, confidence
+
 
 # Main Application
 st.title("🧬 DNA Binding Protein Classifier")
-st.subheader("Minimal Cloud Version")
+st.subheader("Machine Learning Powered Classification")
 
 # Show dependency status
 # Model selection
@@ -308,30 +286,37 @@ model_categories = {
     }
 }
 
-# Use fallback mode if no ML dependencies
-use_fallback = not (TENSORFLOW_AVAILABLE or JOBLIB_AVAILABLE)
+# Check if required ML dependencies are available
+if not (TENSORFLOW_AVAILABLE or JOBLIB_AVAILABLE):
+    st.error("❌ Required ML libraries not available. Please install tensorflow and/or scikit-learn.")
+    st.stop()
 
-if use_fallback:
-    st.sidebar.warning("⚠️ ML libraries not available. Using rule-based prediction.")
-    selected_model_type = "Rule-based"
-    selected_model_path = None
-else:
-    selected_category = st.sidebar.selectbox("Select Model Category", list(model_categories.keys()))
-    selected_model_name = st.sidebar.selectbox("Select Model", list(model_categories[selected_category].keys()))
-    selected_model_path = model_categories[selected_category][selected_model_name]
-    selected_model_type = f"{selected_model_name} ({selected_category})"
-    
-    # Display selected model info
-    st.sidebar.info(f"**Selected Model:**\n{selected_model_type}")
+# Model selection
+selected_category = st.sidebar.selectbox("Select Model Category", list(model_categories.keys()))
+selected_model_name = st.sidebar.selectbox("Select Model", list(model_categories[selected_category].keys()))
+selected_model_path = model_categories[selected_category][selected_model_name]
+selected_model_type = f"{selected_model_name} ({selected_category})"
 
-if not (PANDAS_AVAILABLE and SKLEARN_AVAILABLE and JOBLIB_AVAILABLE):
-    st.warning("""
-    ⚠️ **Limited Functionality Mode**
-    Some dependencies are missing. Using simplified rule-based prediction.
-    For full ML model functionality, ensure all dependencies are installed.
-    """)
+# Display selected model info
+st.sidebar.info(f"**Selected Model:**\n{selected_model_type}")
+
+# Check dependencies status
+missing_deps = []
+if not PANDAS_AVAILABLE:
+    missing_deps.append("pandas")
+if not NUMPY_AVAILABLE:
+    missing_deps.append("numpy")
+if not SKLEARN_AVAILABLE:
+    missing_deps.append("scikit-learn")
+if not JOBLIB_AVAILABLE:
+    missing_deps.append("joblib")
+if not TENSORFLOW_AVAILABLE and "CNN" in selected_category:
+    missing_deps.append("tensorflow")
+
+if missing_deps:
+    st.warning(f"⚠️ Missing dependencies: {', '.join(missing_deps)}")
 else:
-    st.success("✅ All dependencies available - Full functionality enabled")
+    st.success("✅ All required dependencies available")
 
 st.info("""
 🎯 **DNA Binding Protein Classification**
@@ -398,18 +383,13 @@ with col2:
         if st.button("🔬 Classify Sequences", type="primary"):
             results = []
             
-            # Load model if not using fallback
-            model = None
-            model_error = None
-            
-            if not use_fallback:
-                with st.spinner("Loading model..."):
-                    model, model_error = safe_load_model(selected_model_path)
-                    
-                if model_error:
-                    st.error(f"Model loading failed: {model_error}")
-                    st.info("Switching to rule-based prediction...")
-                    use_fallback = True
+            # Load model
+            with st.spinner("Loading model..."):
+                model, model_error = safe_load_model(selected_model_path)
+                
+            if model_error:
+                st.error(f"Model loading failed: {model_error}")
+                st.stop()
             
             with st.spinner("Classifying sequences..."):
                 progress_bar = st.progress(0)
@@ -424,19 +404,15 @@ with col2:
                         conf_text = "N/A"
                         method = "N/A"
                     else:
-                        if use_fallback:
-                            prediction, confidence = simple_prediction(cleaned_seq)
-                            method = "Rule-based"
-                        else:
-                            prediction, confidence = make_prediction_with_model(model, cleaned_seq, selected_model_type)
-                            method = selected_model_type
-                            
-                            if prediction is None:
-                                prediction, confidence = simple_prediction(cleaned_seq)
-                                method = "Rule-based (fallback)"
+                        prediction, confidence = make_prediction_with_model(model, cleaned_seq, selected_model_type)
+                        method = selected_model_type
                         
-                        pred_text = "🧬 DNA Binding" if prediction == 1 else "🚫 Non-DNA Binding"
-                        conf_text = f"{confidence:.3f}" if confidence is not None else "N/A"
+                        if prediction is None:
+                            pred_text = "❌ Prediction failed"
+                            conf_text = "N/A"
+                        else:
+                            pred_text = "🧬 DNA Binding" if prediction == 1 else "🚫 Non-DNA Binding"
+                            conf_text = f"{confidence:.3f}" if confidence is not None else "N/A"
                     
                     results.append({
                         'Sequence ID': header,
@@ -482,30 +458,25 @@ col3, col4 = st.columns(2)
 
 with col3:
     st.subheader("Method")
-    if SKLEARN_AVAILABLE and JOBLIB_AVAILABLE:
-        st.write("**Mode:** Machine Learning Models")
-        st.write("**Models:** Random Forest, SVM, etc.")
-    else:
-        st.write("**Mode:** Rule-based Heuristics")
-        st.write("**Features:** Amino acid composition, physicochemical properties")
-    
+    st.write("**Mode:** Machine Learning Models")
+    st.write("**Models:** CNN, SVM, Random Forest, etc.")
+    st.write("**Features:** Amino acid composition, physicochemical properties, PseAAC")
     st.write("**Input:** Protein sequences (FASTA format)")
     st.write("**Output:** DNA binding prediction + confidence")
 
 with col4:
     st.subheader("Usage Instructions")
     st.write("""
-    1. **Input**: Enter sequences or upload FASTA file
-    2. **Classify**: Click the classify button
-    3. **Results**: View predictions and confidence scores
-    4. **Download**: Export results as CSV (if available)
+    1. **Select Model**: Choose a model category and specific model
+    2. **Input**: Enter sequences or upload FASTA file
+    3. **Classify**: Click the classify button
+    4. **Results**: View predictions and confidence scores
+    5. **Download**: Export results as CSV
     
-    **Note:** This minimal version uses simplified prediction methods
-    when full ML dependencies are not available.
+    **Note:** Requires ML dependencies (tensorflow, scikit-learn, etc.)
     """)
 
 # Footer
 st.markdown("---")
-st.markdown("**DNA Binding Protein Classifier** - Minimal Cloud Deployment")
-if not (PANDAS_AVAILABLE and SKLEARN_AVAILABLE and JOBLIB_AVAILABLE):
-    st.caption("⚠️ Running in limited mode due to missing dependencies")
+st.markdown("**DNA Binding Protein Classifier** - Machine Learning Powered")
+st.caption("🧬 Using trained ML models for accurate DNA binding prediction")
