@@ -83,29 +83,84 @@ def calculate_amino_acid_composition(sequence):
     return composition
 
 def extract_physicochemical_properties(sequence):
-    """Extract physicochemical properties from protein sequence"""
-    hydrophobic = set('AILVFWYMC')
-    hydrophilic = set('DEKRHNQST')
-    aromatic = set('FWY')
-    aliphatic = set('AILV')
-    charged = set('DEKR')
-    polar = set('STNQCYWH')
-    
+    """Extract physicochemical properties from protein sequence (9 features to match training)"""
     sequence = sequence.upper()
     length = len(sequence)
     
     if length == 0:
-        return [0.0] * 6
+        return [0.0] * 9
     
-    properties = []
-    properties.append(sum(1 for aa in sequence if aa in hydrophobic) / length)
-    properties.append(sum(1 for aa in sequence if aa in hydrophilic) / length)
-    properties.append(sum(1 for aa in sequence if aa in aromatic) / length)
-    properties.append(sum(1 for aa in sequence if aa in aliphatic) / length)
-    properties.append(sum(1 for aa in sequence if aa in charged) / length)
-    properties.append(sum(1 for aa in sequence if aa in polar) / length)
+    # Remove invalid characters
+    characters_to_remove = ['X', 'U', "O", "B"]
+    for char in characters_to_remove:
+        sequence = sequence.replace(char, '')
     
-    return properties
+    # Re-calculate length after cleaning
+    length = len(sequence)
+    if length == 0:
+        return [0.0] * 9
+    
+    # Hydropathy calculation (matching training notebook)
+    hydropathy_index = {
+        'A': 1.8, 'C': 2.5, 'D': -3.5, 'E': -3.5, 'F': 2.8,
+        'G': -0.4, 'H': -0.2, 'I': 4.5, 'K': -3.9, 'L': 3.8,
+        'M': 1.9, 'N': -3.5, 'P': -1.6, 'Q': -3.5, 'R': -4.5,
+        'S': -0.8, 'T': -0.7, 'V': 4.2, 'W': -0.9, 'Y': -1.3
+    }
+    
+    hydropathy = sum(hydropathy_index.get(aa, 0) for aa in sequence) / length
+    
+    # Net charge calculation (matching training notebook)
+    pKa_values = {'K': 10.5, 'R': 12.5, 'H': 6.0, 'D': 3.9, 'E': 4.2}
+    selected_pH = 7.0
+    charge = 0
+    
+    for aa in sequence:
+        if aa in pKa_values:
+            if aa in ['K', 'R', 'H']:  # Basic amino acids
+                if selected_pH < pKa_values[aa]:
+                    charge += 1  # Protonated form (positive charge)
+            elif aa in ['D', 'E']:  # Acidic amino acids
+                if selected_pH > pKa_values[aa]:
+                    charge -= 1  # Deprotonated form (negative charge)
+    
+    # Use Bio.SeqUtils.ProtParam for other properties (matching training notebook)
+    try:
+        from Bio.SeqUtils.ProtParam import ProteinAnalysis
+        protein_analysis = ProteinAnalysis(sequence)
+        
+        molecular_weight = protein_analysis.molecular_weight()
+        instability_index = protein_analysis.instability_index()
+        aromaticity = protein_analysis.aromaticity()
+        flexibility = protein_analysis.flexibility()
+        flexibility_mean = sum(flexibility) / len(flexibility) if len(flexibility) > 0 else 0
+        isoelectric_point = protein_analysis.isoelectric_point()
+        sec_structure_fraction = protein_analysis.secondary_structure_fraction()
+        sec_structure_mean = sum(sec_structure_fraction) / len(sec_structure_fraction)
+        
+    except ImportError:
+        # Fallback if Bio is not available
+        molecular_weight = length * 110  # Approximate average MW per AA
+        instability_index = 40.0  # Default value
+        aromaticity = sum(1 for aa in sequence if aa in 'FWY') / length
+        flexibility_mean = 1.0  # Default flexibility
+        isoelectric_point = 7.0  # Neutral pH
+        sec_structure_mean = 0.3  # Default secondary structure
+    
+    # Return 9 features matching the training notebook order:
+    # Length, Hydropathy, Net_charge, Molecular Weight, Instability Index, 
+    # Aromaticity, Flexibility(Mean), Isoelectric Point, Secondary Structure Fraction
+    return [
+        length,                 # 0: Length  
+        hydropathy,            # 1: Hydropathy
+        charge,                # 2: Net_charge
+        molecular_weight,      # 3: Molecular Weight
+        instability_index,     # 4: Instability Index
+        aromaticity,           # 5: Aromaticity
+        flexibility_mean,      # 6: Flexibility(Mean)
+        isoelectric_point,     # 7: Isoelectric Point
+        sec_structure_mean     # 8: Secondary Structure Fraction
+    ]
 
 def safe_load_model(model_path):
     """Safely load model with error handling"""
@@ -132,6 +187,74 @@ def safe_load_model(model_path):
                 return None, "Joblib not available - Traditional ML models not supported"
     except Exception as e:
         return None, f"Error loading model: {str(e)}"
+
+def test_model_prediction(sequence, model_category, model_name):
+    """Test a single model prediction by loading and making prediction"""
+    # Define model paths
+    model_categories = {
+        "CNN": {
+            "CNN1": "models/CNN/CNN1.h5",
+            "CNN2": "models/CNN/CNN2.h5",
+            "ProtCNN1": "models/CNN/ProtCNN1.h5",
+            "ProtCNN2": "models/CNN/ProtCNN2.h5"
+        },
+        "TF-IDF": {
+            "Logistic Regression": "models/Traditional ML - TF-IDF/Logistic Regression_TF-IDF.joblib",
+            "SVM": "models/Traditional ML - TF-IDF/SVM_TF-IDF.joblib",
+            "Random Forest": "models/Traditional ML - TF-IDF/Random Forest_TF-IDF.joblib",
+            "Naive Bayes": "models/Traditional ML - TF-IDF/Naive Bayes_TF-IDF.joblib",
+            "Decision Tree": "models/Traditional ML - TF-IDF/Decision Tree_TF-IDF.joblib",
+            "KNN": "models/Traditional ML - TF-IDF/KNN_TF-IDF.joblib"
+        },
+        "PseAAC": {
+            "Logistic Regression": "models/Traditional ML - PseAAC/LR_pseAAC.joblib",
+            "SVM": "models/Traditional ML - PseAAC/SVM_pseAAC.joblib",
+            "Random Forest": "models/Traditional ML - PseAAC/RF_pseAAC.joblib",
+            "Naive Bayes": "models/Traditional ML - PseAAC/NB_pseAAC.joblib",
+            "Decision Tree": "models/Traditional ML - PseAAC/DT_pseAAC.joblib",
+            "KNN": "models/Traditional ML - PseAAC/KNN_pseAAC.joblib"
+        },
+        "Physicochemical": {
+            "Logistic Regression": "models/Traditional ML - Physicochemical Properties/LR_Physicochemical_Properties.joblib",
+            "SVM": "models/Traditional ML - Physicochemical Properties/SVM_Physicochemical_Properties.joblib",
+            "Random Forest": "models/Traditional ML - Physicochemical Properties/RF_Physicochemical_Properties.joblib",
+            "Naive Bayes": "models/Traditional ML - Physicochemical Properties/NB_Physicochemical_Properties.joblib",
+            "Decision Tree": "models/Traditional ML - Physicochemical Properties/DT_Physicochemical_Properties.joblib",
+            "KNN": "models/Traditional ML - Physicochemical Properties/KNN_Physicochemical_Properties.joblib"
+        }
+    }
+    
+    try:
+        # Get model path
+        model_path = model_categories[model_category][model_name]
+        
+        # Load model
+        if model_category == "CNN":
+            if not TENSORFLOW_AVAILABLE:
+                return None, "TensorFlow not available for CNN models"
+            import tensorflow as tf
+            model = tf.keras.models.load_model(model_path)
+        else:
+            if not JOBLIB_AVAILABLE:
+                return None, "Joblib not available for traditional ML models"
+            import joblib
+            model = joblib.load(model_path)
+        
+        # Make prediction
+        prediction, confidence = make_prediction_with_model(model, sequence, model_category)
+        
+        if prediction is not None:
+            pred_label = "DNA Binding" if prediction == 1 else "Non-DNA Binding"
+            return {
+                'prediction': pred_label,
+                'confidence': f"{confidence:.4f}" if confidence is not None else "N/A",
+                'method': 'Original ML Model'
+            }
+        else:
+            return None
+            
+    except Exception as e:
+        return None
 
 def make_prediction_with_model(model, sequence, model_type):
     """Make prediction using loaded ML model"""
@@ -165,24 +288,23 @@ def make_prediction_with_model(model, sequence, model_type):
                         pass
             elif 'Physicochemical' in model_type:
                 features = extract_physicochemical_properties(sequence)
-                feature_names = ['Hydrophobic', 'Hydrophilic', 'Aromatic', 'Aliphatic', 'Charged', 'Polar']
                 
-                if PANDAS_AVAILABLE:
-                    import pandas as pd
-                    feature_df = pd.DataFrame([features], columns=feature_names)
-                    prediction = model.predict(feature_df)[0]
-                    
+                if hasattr(model, 'model'):  # statsmodels model
+                    # statsmodels models expect just the features (constant already included in training)
+                    import numpy as np
+                    prediction_proba = model.predict(np.array(features).reshape(1, -1))[0]
+                    prediction = 1 if prediction_proba > 0.5 else 0
+                    confidence = prediction_proba if prediction == 1 else (1 - prediction_proba)
+                else:
+                    # sklearn model
+                    prediction = model.predict([features])[0]
                     confidence = None
                     if hasattr(model, 'predict_proba'):
                         try:
-                            proba = model.predict_proba(feature_df)[0]
+                            proba = model.predict_proba([features])[0]
                             confidence = max(proba)
                         except:
                             pass
-                else:
-                    # Fallback without pandas
-                    prediction = model.predict([features])[0]
-                    confidence = None
             else:
                 # TF-IDF and other models
                 features = calculate_amino_acid_composition(sequence)
