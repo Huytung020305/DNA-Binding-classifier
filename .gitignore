@@ -105,16 +105,29 @@ tensorboard_logs/
 wandb/
 mlruns/
 
-# Exclude large model files to avoid LFS issues
+# Exclude large model files to avoid GitHub file size limits (>100MB)
 models/CNN/ProtCNN1.h5
 models/CNN/ProtCNN2.h5
 models/Traditional ML - Physicochemical Properties/RF_Physicochemical_Properties.joblib
 models/Traditional ML - PseAAC/RF_pseAAC.joblib
 models/Traditional ML - TF-IDF/Random Forest_TF-IDF.joblib
 
-# Keep smaller essential models for deployment
+# Keep smaller essential models for deployment (under 100MB)
 !models/CNN/CNN1.h5
 !models/CNN/CNN2.h5
+!models/Traditional ML - TF-IDF/SVM_TF-IDF.joblib
+!models/Traditional ML - TF-IDF/Decision Tree_TF-IDF.joblib
+!models/Traditional ML - TF-IDF/Logistic Regression_TF-IDF.joblib
+!models/Traditional ML - TF-IDF/Naive Bayes_TF-IDF.joblib
+!models/Traditional ML - TF-IDF/KNN_TF-IDF.joblib
+!models/Traditional ML - PseAAC/LR_pseAAC.joblib
+!models/Traditional ML - PseAAC/SVM_pseAAC.joblib
+!models/Traditional ML - PseAAC/DT_pseAAC.joblib
+!models/Traditional ML - PseAAC/NB_pseAAC.joblib
+!models/Traditional ML - Physicochemical Properties/LR_Physicochemical_Properties.joblib
+!models/Traditional ML - Physicochemical Properties/SVM_Physicochemical_Properties.joblib
+!models/Traditional ML - Physicochemical Properties/DT_Physicochemical_Properties.joblib
+!models/Traditional ML - Physicochemical Properties/NB_Physicochemical_Properties.joblib
 
 # Large training data files (not needed for deployment)
 Data/Train.fasta
