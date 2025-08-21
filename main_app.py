@@ -153,57 +153,126 @@ def make_prediction_with_model(model, sequence, model_type):
             # Traditional ML prediction
             if 'PseAAC' in model_type or 'pseAAC' in model_type:
                 features = calculate_pseaac_features(sequence)
-                amino_acids = ['A', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'K', 'L', 'M', 'N', 'P', 'Q', 'R', 'S', 'T', 'V', 'W', 'Y']
-                feature_names = [f'AA_{aa}' for aa in amino_acids] + [f'Lambda_{i+1}' for i in range(10)]
-            elif 'Physicochemical' in model_type:
-                features = extract_physicochemical_properties(sequence)
-                feature_names = ['Hydrophobic', 'Hydrophilic', 'Aromatic', 'Aliphatic', 'Charged', 'Polar']
-            else:
-                features = calculate_amino_acid_composition(sequence)
-                amino_acids = ['A', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'K', 'L', 'M', 'N', 'P', 'Q', 'R', 'S', 'T', 'V', 'W', 'Y']
-                feature_names = [f'AA_{aa}' for aa in amino_acids]
-            
-            if PANDAS_AVAILABLE:
-                import pandas as pd
-                feature_df = pd.DataFrame([features], columns=feature_names)
-                prediction = model.predict(feature_df)[0]
+                # For PseAAC, use array input directly since model expects 40 features but only has 36 feature names
+                prediction = model.predict([features])[0]
                 
                 confidence = None
                 if hasattr(model, 'predict_proba'):
                     try:
-                        proba = model.predict_proba(feature_df)[0]
+                        proba = model.predict_proba([features])[0]
                         confidence = max(proba)
                     except:
                         pass
+            elif 'Physicochemical' in model_type:
+                features = extract_physicochemical_properties(sequence)
+                feature_names = ['Hydrophobic', 'Hydrophilic', 'Aromatic', 'Aliphatic', 'Charged', 'Polar']
+                
+                if PANDAS_AVAILABLE:
+                    import pandas as pd
+                    feature_df = pd.DataFrame([features], columns=feature_names)
+                    prediction = model.predict(feature_df)[0]
+                    
+                    confidence = None
+                    if hasattr(model, 'predict_proba'):
+                        try:
+                            proba = model.predict_proba(feature_df)[0]
+                            confidence = max(proba)
+                        except:
+                            pass
+                else:
+                    # Fallback without pandas
+                    prediction = model.predict([features])[0]
+                    confidence = None
             else:
-                # Fallback without pandas
-                prediction = model.predict([features])[0]
-                confidence = None
+                # TF-IDF and other models
+                features = calculate_amino_acid_composition(sequence)
+                amino_acids = ['A', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'K', 'L', 'M', 'N', 'P', 'Q', 'R', 'S', 'T', 'V', 'W', 'Y']
+                feature_names = [f'AA_{aa}' for aa in amino_acids]
+                
+                if PANDAS_AVAILABLE:
+                    import pandas as pd
+                    feature_df = pd.DataFrame([features], columns=feature_names)
+                    prediction = model.predict(feature_df)[0]
+                    
+                    confidence = None
+                    if hasattr(model, 'predict_proba'):
+                        try:
+                            proba = model.predict_proba(feature_df)[0]
+                            confidence = max(proba)
+                        except:
+                            pass
+                else:
+                    # Fallback without pandas
+                    prediction = model.predict([features])[0]
+                    confidence = None
         
         return prediction, confidence
     except Exception as e:
         return None, f"Model prediction error: {str(e)}"
 
-def calculate_pseaac_features(sequence, lambda_val=10):
-    """Calculate simplified PseAAC features"""
-    aa_composition = calculate_amino_acid_composition(sequence)
-    
-    sequence = re.sub(r'[^ACDEFGHIKLMNPQRSTVWY]', '', sequence.upper())
-    
-    if not NUMPY_AVAILABLE:
-        # Simple fallback without numpy
-        correlation_factors = [0.0] * lambda_val
-        return aa_composition + correlation_factors
-    
+def calculate_pseaac_features(sequence, lamda=4, weight=0.05):
+    """Calculate PseAAC features matching the trained model's expected format (40 features)"""
     import numpy as np
     
+    # Clean sequence - remove any invalid amino acids
+    sequence = re.sub(r'[^ACDEFGHIKLMNPQRSTVWY]', '', sequence.upper())
+    
+    if len(sequence) == 0:
+        return [0.0] * 40  # Return 40 zeros for empty sequence
+    
+    # 1. Calculate amino acid composition (20 features: AA_A, AA_C, etc.)
+    aa_composition = calculate_amino_acid_composition(sequence)
+    
+    # 2. Calculate physicochemical property statistics (16 features)
+    # Properties from the original propy implementation
     hydrophobicity = {'A': 1.8, 'C': 2.5, 'D': -3.5, 'E': -3.5, 'F': 2.8,
                      'G': -0.4, 'H': -3.2, 'I': 4.5, 'K': -3.9, 'L': 3.8,
                      'M': 1.9, 'N': -3.5, 'P': -1.6, 'Q': -3.5, 'R': -4.5,
                      'S': -0.8, 'T': -0.7, 'V': 4.2, 'W': -0.9, 'Y': -1.3}
     
+    # Molecular weight (approximate)
+    molecular_weight = {'A': 89.1, 'C': 121.0, 'D': 133.1, 'E': 147.1, 'F': 165.2,
+                       'G': 75.1, 'H': 155.2, 'I': 131.2, 'K': 146.2, 'L': 131.2,
+                       'M': 149.2, 'N': 132.1, 'P': 115.1, 'Q': 146.2, 'R': 174.2,
+                       'S': 105.1, 'T': 119.1, 'V': 117.1, 'W': 204.2, 'Y': 181.2}
+    
+    # Volume (approximate)
+    volume = {'A': 88.6, 'C': 108.5, 'D': 111.1, 'E': 138.4, 'F': 189.9,
+             'G': 60.1, 'H': 153.2, 'I': 166.7, 'K': 168.6, 'L': 166.7,
+             'M': 162.9, 'N': 114.1, 'P': 112.7, 'Q': 143.8, 'R': 173.4,
+             'S': 89.0, 'T': 116.1, 'V': 140.0, 'W': 227.8, 'Y': 193.6}
+    
+    # Helix propensity (approximate)
+    helix_prop = {'A': 1.42, 'C': 0.70, 'D': 1.01, 'E': 1.51, 'F': 1.13,
+                 'G': 0.57, 'H': 1.00, 'I': 1.08, 'K': 1.16, 'L': 1.21,
+                 'M': 1.45, 'N': 0.67, 'P': 0.57, 'Q': 1.11, 'R': 0.98,
+                 'S': 0.77, 'T': 0.83, 'V': 1.06, 'W': 1.08, 'Y': 0.69}
+    
+    # Calculate statistics for each property
+    properties = [hydrophobicity, molecular_weight, volume, helix_prop]
+    
+    property_features = []
+    
+    for prop_dict in properties:
+        # Get property values for the sequence
+        prop_values = [prop_dict.get(aa, 0) for aa in sequence]
+        
+        if prop_values:
+            # Calculate mean, std, min, max
+            prop_array = np.array(prop_values)
+            property_features.extend([
+                np.mean(prop_array),  # mean
+                np.std(prop_array),   # std
+                np.min(prop_array),   # min
+                np.max(prop_array)    # max
+            ])
+        else:
+            # If no values, add zeros
+            property_features.extend([0.0, 0.0, 0.0, 0.0])
+    
+    # 3. Calculate correlation factors (4 additional lambda features)
     correlation_factors = []
-    for lag in range(1, min(lambda_val + 1, len(sequence))):
+    for lag in range(1, lamda + 1):
         if len(sequence) > lag:
             correlations = []
             for i in range(len(sequence) - lag):
@@ -218,10 +287,14 @@ def calculate_pseaac_features(sequence, lambda_val=10):
         else:
             correlation_factors.append(0.0)
     
-    while len(correlation_factors) < lambda_val:
+    # Ensure we have exactly 4 correlation factors
+    while len(correlation_factors) < lamda:
         correlation_factors.append(0.0)
     
-    return aa_composition + correlation_factors[:lambda_val]
+    # Combine all features: 20 AA composition + 16 property statistics + 4 correlation = 40 total
+    all_features = aa_composition + property_features + correlation_factors[:lamda]
+    
+    return all_features
 
 def sequence_to_cnn_input(sequence, max_length=1200):
     """Convert protein sequence to CNN input format"""
