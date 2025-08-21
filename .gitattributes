@@ -3,9 +3,8 @@ Saved[[:space:]]Model/CNN/CNN2.h5 filter=lfs diff=lfs merge=lfs -text
 Saved[[:space:]]Model/CNN/ProtCNN1.h5 filter=lfs diff=lfs merge=lfs -text
 Saved[[:space:]]Model/CNN/ProtCNN2.h5 filter=lfs diff=lfs merge=lfs -text
 Saved[[:space:]]Model/Traditional[[:space:]]ML[[:space:]]-[[:space:]]Physicochemical[[:space:]]Properties/RF_Physicochemical_Properties.joblib filter=lfs diff=lfs merge=lfs -text
-Data/aligned1.fasta filter=lfs diff=lfs merge=lfs -text
 Saved[[:space:]]Model/Traditional[[:space:]]ML[[:space:]]-[[:space:]]TF-IDF/Random[[:space:]]Forest_TF-IDF.joblib filter=lfs diff=lfs merge=lfs -text
 Saved[[:space:]]Model/Traditional[[:space:]]ML[[:space:]]-[[:space:]]PseAAC/RF_pseAAC.joblib filter=lfs diff=lfs merge=lfs -text
 *.h5 filter=lfs diff=lfs merge=lfs -text
-*.fasta filter=lfs diff=lfs merge=lfs -text
 *.joblib filter=lfs diff=lfs merge=lfs -text
+# Removed *.fasta filter to fix deployment issues - large FASTA files now in .gitignore

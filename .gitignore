@@ -116,12 +116,19 @@ models/Traditional ML - TF-IDF/Random Forest_TF-IDF.joblib
 !models/CNN/CNN1.h5
 !models/CNN/CNN2.h5
 
+# Large training data files (not needed for deployment)
+Data/Train.fasta
+Data/Train_valid.fasta
+Data/Test.fasta
+Data/Test_valid.fasta
+
 # Data files (uncomment if you don't want to track data)
 # *.csv
 # *.json
 # *.parquet
 # *.h5
 # *.hdf5
+# Note: Only large FASTA files excluded above, keep sample files
 # *.fasta
 # *.fa
 
