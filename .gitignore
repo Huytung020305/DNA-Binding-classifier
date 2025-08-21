@@ -105,14 +105,16 @@ tensorboard_logs/
 wandb/
 mlruns/
 
-# Exclude most model files but keep essential ones for deployment
-models/Traditional ML - TF-IDF/
-models/Traditional ML - PseAAC/*
-models/Traditional ML - Physicochemical Properties/*
-models/CNN/*
-!models/Traditional ML - PseAAC/RF_pseAAC.joblib
-!models/Traditional ML - Physicochemical Properties/RF_Physicochemical_Properties.joblib
+# Exclude large model files to avoid LFS issues
+models/CNN/ProtCNN1.h5
+models/CNN/ProtCNN2.h5
+models/Traditional ML - Physicochemical Properties/RF_Physicochemical_Properties.joblib
+models/Traditional ML - PseAAC/RF_pseAAC.joblib
+models/Traditional ML - TF-IDF/Random Forest_TF-IDF.joblib
+
+# Keep smaller essential models for deployment
 !models/CNN/CNN1.h5
+!models/CNN/CNN2.h5
 
 # Data files (uncomment if you don't want to track data)
 # *.csv
